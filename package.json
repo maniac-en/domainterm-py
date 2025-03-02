@@ -1,0 +1,28 @@
+{
+  "name": "domain-tx",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.ts",
+  "scripts": {
+    "dev": "tsx src/index.ts",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@google-cloud/translate": "^8.5.1",
+    "dotenv": "^16.4.7",
+    "openai": "^4.86.1",
+    "unidecode": "^1.1.0",
+    "whois-json": "^2.0.4",
+    "yargs": "^17.7.2"
+  },
+  "devDependencies": {
+    "@types/node": "^22.11.0",
+    "@types/whois-json": "^2.0.4",
+    "@types/yargs": "^17.0.24",
+    "tsx": "^4.19.3",
+    "typescript": "^5.8.2"
+  }
+}
