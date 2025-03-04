@@ -13,12 +13,20 @@
   "dependencies": {
     "@google-cloud/translate": "^8.5.1",
     "dotenv": "^16.4.7",
+    "ink": "^5.1.1",
+    "lodash": "^4.17.21",
+    "lodash-es": "^4.17.21",
+    "lowdb": "^7.0.1",
     "openai": "^4.86.1",
+    "react": "^18.3.1",
+    "remeda": "^2.21.0",
     "unidecode": "^1.1.0",
     "whois-json": "^2.0.4",
     "yargs": "^17.7.2"
   },
   "devDependencies": {
+    "@types/lodash": "^4.17.16",
+    "@types/lodash-es": "^4.17.12",
     "@types/node": "^22.11.0",
     "@types/whois-json": "^2.0.4",
     "@types/yargs": "^17.0.24",

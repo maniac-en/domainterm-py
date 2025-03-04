@@ -6,17 +6,21 @@ dotenv.config();
 import * as yargs from "yargs";
 import unidecode from "unidecode";
 import OpenAI from "openai";
-import whois from "whois-json";
 import dns from "dns";
+import fs from "fs/promises";
+import { db } from "./data/db";
 
 import { translate } from "./utils/translate";
 import { languages } from "./utils/languages";
 import { Translation, TranslationWithWebifiedWords } from "./types";
+import { render } from "ink";
 
 const { CLOUDFLARE_API_TOKEN, CLOUDFLARE_ACCOUNT_ID } = process.env;
 
 const openai = new OpenAI({
+  // Using LMStudio locally
   baseURL: "http://localhost:1234/v1",
+  // WARNING: This is a fake API key. Do not use in production.
   apiKey: "sk-9q3f1s3d3s3d3s3d3s3d3s3d3s3d3s3d",
 });
 
@@ -24,79 +28,185 @@ const openai = new OpenAI({
   .scriptName("domain-tx-cli")
   .usage("$0 get [args]")
   .command(
-    "get [word]",
-    "get translated domains available",
+    "run",
+    "run the daemons to scan for domains",
     (yargs) => {
-      yargs.positional("word", {
-        type: "string",
-        default: "guardian",
-        describe: "the word to translate",
-      });
+      // yargs.positional("word", {
+      //   type: "string",
+      //   default: "guardian",
+      //   describe: "the word to translate",
+      // });
     },
     async function (argv) {
       try {
-        // lookup translations via google translate api
-        const translations = await getTranslations(argv.word);
+        // Load the database
+        await db.read();
 
-        // use an llm to webify the words: eg Walter to Waltr
-        console.log("Getting webified words");
-        console.log("");
-        const initialTotal = translations.length;
-        let current = 0;
-        const webifiedTranslations = await Promise.all(
-          translations.map(async (translation) => {
-            const webifiedWords = await getWebifiedWords(translation);
-            current++;
-            process.stdout.clearLine(0);
-            process.stdout.cursorTo(0);
-            process.stdout.write(`${current}/${initialTotal}`);
-            return {
-              ...translation,
-              webifiedWords,
-            };
-          })
-        );
+        const localBaseWordCache: Record<string, boolean> = {};
 
-        process.stdout.write("\n");
+        const translationQueue: Set<string> = new Set();
+        const webificationQueue: Set<Translation> = new Set();
+        const whoisQueue: Set<string> = new Set();
+        const searchQueue: string[] = [];
+        const ratingQueue: string[] = [];
 
-        // for each, translation lookup whois info
-        console.log("Checking availability");
+        // Watch the domain file for changes
+        setInterval(async () => {
+          try {
+            const baseWordsFileExists = await fs
+              .stat("base-words.txt")
+              .catch(() => {});
 
-        const availableDomains: any = [];
-        const intervalId = setInterval(async () => {
-          const translation = webifiedTranslations.shift();
-
-          if (!translation) {
-            clearInterval(intervalId);
-            console.log("No more translations to check");
-            process.exit(0);
-            return;
-          }
-          const availability = await checkDomainAvailability(translation);
-          if (availability && availability.length > 0) {
-            availability.forEach((domain) => {
+            if (!baseWordsFileExists) {
               console.log(
-                "Available:",
-                domain.domain,
-                "(",
-                domain.language.name,
-                ")",
-                "(original word:",
-                domain.word,
-                ")"
+                "base-words.txt not found. Exiting. Create it with a line separate list of words to translate."
               );
-            });
+              process.exit(0);
+              return;
+            }
 
-            availableDomains.push(...availability);
+            const baseWordsFileContents = await fs.readFile(
+              "base-words.txt",
+              "utf8"
+            );
+            const baseWords = baseWordsFileContents.split("\n");
+
+            // for each base word, add it to the queue
+            baseWords.forEach(async (baseWord) => {
+              if (!localBaseWordCache[baseWord]) {
+                localBaseWordCache[baseWord] = true;
+                translationQueue.add(baseWord);
+                whoisQueue.add(baseWord);
+              }
+            });
+          } catch (error) {
+            console.error(error);
           }
         }, 3000);
-        process.stdout.write("\n");
+
+        setInterval(async () => {
+          const translationQueueArray = Array.from(translationQueue);
+
+          let word = translationQueueArray.shift();
+
+          if (!word) {
+            return;
+          }
+
+          translationQueue.delete(word);
+
+          let translations = db.chain.get("translationCache").get(word).value();
+
+          if (!translations) {
+            console.log("Getting translations for", word);
+            translations = await getTranslations(word);
+            db.data.translationCache[word] = translations;
+            await db.write();
+          }
+
+          translations.forEach((translation) => {
+            webificationQueue.add(translation);
+            if (translation.translation.cleaned) {
+              whoisQueue.add(translation.translation.cleaned);
+            }
+          });
+        }, 3000);
+
+        setInterval(async () => {
+          try {
+            const webificationQueueArray = Array.from(webificationQueue);
+
+            const word = webificationQueueArray.shift();
+
+            if (!word) {
+              return;
+            }
+
+            webificationQueue.delete(word);
+
+            let webifiedTranslations = db.chain
+              .get("webifiedCache")
+              .get(word.translation.cleaned)
+              .value();
+
+            let webifiedWords = webifiedTranslations?.webifiedWords;
+
+            if (!webifiedWords) {
+              console.log(
+                "Getting webified words for",
+                word.translation.cleaned
+              );
+              webifiedWords = await getWebifiedWords(word);
+              db.data.webifiedCache[word.translation.cleaned] = {
+                ...word,
+                webifiedWords,
+              } as TranslationWithWebifiedWords;
+              await db.write();
+            }
+
+            [word.translation.cleaned, ...webifiedWords]
+              .filter(Boolean)
+              .forEach((_word) => {
+                whoisQueue.add(_word);
+              });
+          } catch (error) {
+            console.error("Error webifying word", error);
+          }
+        }, 1000);
+
+        setInterval(async () => {
+          try {
+            const whoisQueueArray = Array.from(whoisQueue);
+
+            const word = whoisQueueArray.shift();
+
+            console.log("word in whois queue", word);
+
+            if (!word) {
+              console.log("whoisQueue is empty", whoisQueue);
+              return;
+            }
+
+            whoisQueue.delete(word);
+
+            let availability = db.chain.get("whoisCache").get(word).value();
+
+            console.log("Cached availability for", word, "is", availability);
+
+            if (availability === undefined) {
+              console.log("Checking whois availability for", word);
+              const availability = await checkDomainAvailability(word);
+
+              if (word === "wallet") {
+                console.log(availability);
+              }
+
+              // await db.chain.get("whoisCache").set(word, availability);
+              db.data.whoisCache[word] = availability;
+              await db.write();
+            }
+
+            if (availability) {
+              console.log("Available:", word);
+            }
+          } catch (error) {
+            console.error("Error checking whois availability", error);
+          }
+        }, 500);
+
+        setInterval(async () => {
+          console.log(`
+            
+---Diagnostics---
+Translations: ${Array.from(translationQueue).length}
+Webifications: ${Array.from(webificationQueue).length}
+Whois: ${Array.from(whoisQueue).length}
+            
+            `);
+        }, 10000);
       } catch (error) {
         console.error(error);
       }
-
-      // for each available domain. lookup via LLM the existence of a product with the name. use RAG to parse google results/
-      // output available domains and the metadata around the word like the country of origin and original word if different from the webification
     }
   )
   .help().argv;
@@ -111,6 +221,7 @@ async function getTranslations(word: string): Promise<Translation[]> {
       }
 
       return {
+        word: unidecode(word).toLowerCase(),
         language,
         translation: {
           raw: response?.[0]?.[0]?.[0],
@@ -135,11 +246,11 @@ async function getWebifiedWords({
   // console.log("Webifying words for", translation.cleaned);
   const response = await openai.chat.completions
     .create({
-      model: "llama-3.2-3b-instruct",
+      model: "qwen2.5-7b-instruct-1m",
       messages: [
         {
           role: "user",
-          content: `Convert the following word into a Web 2.0 style SaaS name by removing random vowels. Return the output as a JS string array. Do not output any text other than the array
+          content: `Convert the following word into a list of Web 2.0 style SaaS name by removing a single vowel each time. Return the output as a JS string array. If there is only one result make sure the array has only one element. Do not output any text other than the array
 
 word: ${translation.cleaned}`,
         },
@@ -155,59 +266,54 @@ word: ${translation.cleaned}`,
   }
 
   try {
-    return JSON.parse(response.choices[0].message.content);
+    return JSON.parse(response.choices[0].message.content.toLowerCase()).filter(
+      (webified) =>
+        Boolean(webified) &&
+        !Array.isArray(webified) &&
+        webified.indexOf(" ") === -1
+    );
   } catch (error) {
     return [];
   }
 }
 
-async function checkDomainAvailability({
-  language,
-  translation: { raw, cleaned },
-  webifiedWords,
-}: TranslationWithWebifiedWords) {
-  const words = [cleaned, ...webifiedWords].filter((word) => word.length > 0);
+async function checkDomainAvailability(word: string) {
+  if (Array.isArray(word)) {
+    word = word.join("");
+  }
 
-  const responses = await Promise.all(
-    words.map(async (word) => {
-      const spacelessWord = word.replace(/\s/g, "");
-      const domain = `${spacelessWord}.com`;
+  const spacelessWord = word.replace(/\s/g, "");
+  const domain = `${spacelessWord}.com`;
 
-      const dnsLookup = await dns.promises.lookup(domain).catch(() => {});
+  const dnsLookup = await dns.promises.lookup(domain).catch(() => {});
 
-      if (dnsLookup) {
-        return null;
-      }
+  if (dnsLookup) {
+    return false;
+  }
 
-      const whoisResponse = await fetch(
-        `https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/intel/whois?domain=${domain}`,
-        {
-          headers: {
-            Authorization: `Bearer ${CLOUDFLARE_API_TOKEN}`,
-          },
-        }
-      );
-
-      const data = await whoisResponse.json().catch(() => {});
-
-      if (!data?.success) {
-        console.log("Failed looking up domain", domain);
-        return null;
-      }
-
-      if (data.result.found) {
-        return null;
-      } else {
-        return {
-          language,
-          word: cleaned,
-          domain,
-        };
-      }
-    })
+  const whoisResponse = await fetch(
+    `https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/intel/whois?domain=${domain}`,
+    {
+      headers: {
+        Authorization: `Bearer ${CLOUDFLARE_API_TOKEN}`,
+      },
+    }
   );
 
-  const filtered = responses.filter((response) => response !== null);
+  const data = await whoisResponse.json().catch((error) => {
+    console.log("Error looking up whois for", domain, error);
+  });
 
-  return filtered;
+  if (domain === "wallet.com" || word === "wallet") {
+    console.error("Raw reponse for wallet.com", data);
+  }
+
+  if (!data?.success) {
+    console.error("Failed looking up domain", domain);
+    return undefined;
+  }
+
+  // console.log({ data });
+
+  return Boolean(!data?.result?.found);
 }

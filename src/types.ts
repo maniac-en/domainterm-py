@@ -1,4 +1,5 @@
 export interface Translation {
+  word: string;
   language: { name: string; code: string };
   translation: { raw: string; cleaned: string };
 }

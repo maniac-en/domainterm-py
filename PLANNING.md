@@ -1,0 +1,10 @@
+- implement caching
+- watch a file containing base words for changes and update the queues
+- reorganize code to use daemons (long running intervals that pop items off their respective queues)
+- save results to files
+- implement TUI using `blessed` or `ink`
+- add queue for doing search lookup
+  - still unsure of how to do the search. Maybe an API or maybe even just scraping the google results page via playwright?
+- perform social lookups
+- add queue for asking LLM to evaluate available domains
+- add a trademark lookup
