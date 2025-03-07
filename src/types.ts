@@ -7,3 +7,8 @@ export interface Translation {
 export interface TranslationWithWebifiedWords extends Translation {
   webifiedWords: string[];
 }
+
+export interface SearchEvaluation {
+  confidence: number;
+  isAvailable: boolean;
+}

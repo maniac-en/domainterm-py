@@ -1,3 +1,12 @@
 wallet
 quota
 ledger
+balance
+count
+usage
+charter
+invoice
+tally
+credit
+purse
+surplus

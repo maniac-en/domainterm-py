@@ -2,4 +2,6 @@
 node_modules
 .qodo
 db.json
+*.csv
+*.txt
 

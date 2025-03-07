@@ -2,7 +2,11 @@ import { Low } from "lowdb";
 import { JSONFile } from "lowdb/node";
 import lodash from "lodash";
 import * as remeda from "remeda";
-import { Translation, TranslationWithWebifiedWords } from "../types";
+import {
+  SearchEvaluation,
+  Translation,
+  TranslationWithWebifiedWords,
+} from "../types";
 
 type Data = {
   // Google translate results
@@ -11,18 +15,17 @@ type Data = {
   webifiedCache: Record<string, TranslationWithWebifiedWords>;
   // WHOIS lookup results
   whoisCache: Record<string, boolean | undefined>;
+  // Evaluated Search Results
+  searchEvaluationCache: Record<string, SearchEvaluation>;
+  // LLM name rating results
+  ratingsCache: Record<string, number>;
+  // Synonym lookup results
+  synonymsCache: Record<string, string[]>;
 
   // --------------------------------------
 
-  // Google search results
-  searchResultsCache: Record<string, string>;
-  // Evaluated Search Results
-  searchEvaluationCache: Record<
-    string,
-    { confidence: number; isAvailable: boolean }
-  >;
-  // LLM name rating results
-  ratingsCache: Record<string, number>;
+  npmCache: Record<string, boolean>;
+  trademarkCache: Record<string, boolean>;
 };
 
 // Extend Low class with a new `chain` field
@@ -38,9 +41,11 @@ const defaultData: Data = {
   whoisCache: {},
   webifiedCache: {},
   translationCache: {},
-  searchResultsCache: {},
   searchEvaluationCache: {},
   ratingsCache: {},
+  synonymsCache: {},
+  npmCache: {},
+  trademarkCache: {},
 };
 const adapter = new JSONFile<Data>("db.json");
 
