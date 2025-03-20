@@ -4,4 +4,6 @@ node_modules
 db.json
 *.csv
 *.txt
+*.bak*.json
+*.bak*.txt
 
