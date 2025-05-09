@@ -28,14 +28,6 @@ To run the tool, you must first create a file called `base-words.txt` in the roo
 
 You can run the command `pnpm dev run` to start the tool. It can take quite some time to finish.
 
-## Other Commands
-
-### `pnpm dev run social [name]`
-
-To run the `social` command you must have the tool, [sherlock](https://github.com/sherlock-project/sherlock) installed locally.
-
-This command will check if the provided name is available on several major social media platforms. [Bitbucket, GitHub, GitLab, and LinkedIn] are used to check for availability.
-
 ## License
 
 MIT License
