@@ -1,9 +1,7 @@
 .env
-node_modules
-.qodo
 db.json
-*.csv
-*.txt
-*.bak*.json
-*.bak*.txt
-
+__pycache__
+logs/*
+base-words.txt
+*.pyc
+social.txt
