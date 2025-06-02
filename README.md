@@ -148,7 +148,7 @@ This project is a Python rewrite of the original [DomainTerm](https://github.com
 MIT License
 
 Copyright 2025 Chris Griffing (Original - [DomainTerm](https://github.com/cmgriffing/domainterm)) <br>
-Copyright 2025 Shivam Mehta (Python Rewrite - [domainterm-py](https://github.com/maniac-en/domainterm-py))
+Copyright 2025 Shivam Mehta (Python Rewrite - [DomainTerm-Py](https://github.com/maniac-en/domainterm-py))
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
 
